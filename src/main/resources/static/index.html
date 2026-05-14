@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>评论店铺地图导航</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        #mapContainer { width: 100%; height: 600px; }
+        .marker-label {
+            background: #fff;
+            border: 2px solid #3b82f6;
+            border-radius: 6px;
+            padding: 2px 8px;
+            font-size: 12px;
+            white-space: nowrap;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+        }
+        .marker-label.verified { border-color: #22c55e; }
+        .marker-label.unverified { border-color: #f59e0b; }
+        .amap-info-content { padding: 12px; font-size: 14px; }
+        .amap-info-content h4 { margin: 0 0 8px; font-size: 15px; }
+        .amap-info-content p { margin: 4px 0; color: #555; }
+        .shop-card { transition: all 0.2s; }
+        .shop-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .loading-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4); display: flex; align-items: center;
+            justify-content: center; z-index: 9999;
+        }
+        .loading-spinner {
+            background: white; border-radius: 12px; padding: 32px;
+            text-align: center; font-size: 16px;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<div id="loadingOverlay" class="loading-overlay" style="display:none">
+    <div class="loading-spinner">
+        <div class="mb-3">
+            <svg class="animate-spin h-8 w-8 text-blue-500 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+        </div>
+        <span id="loadingText">正在解析评论...</span>
+    </div>
+</div>
+
+<div class="max-w-7xl mx-auto px-4 py-6">
+    <!-- Header -->
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-gray-800">评论店铺地图导航</h1>
+        <p class="text-gray-500 mt-1">粘贴含店铺地址的评论，自动解析并在地图上展示位置关系</p>
+    </div>
+
+    <!-- Input Section -->
+    <div class="bg-white rounded-xl shadow-sm border p-6 mb-6">
+        <div class="flex items-center justify-between mb-3">
+            <label class="block text-sm font-medium text-gray-700">粘贴评论文本</label>
+            <div class="flex gap-2 items-center">
+                <button id="btnLocation" onclick="getLocation()"
+                    class="text-sm px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 border border-blue-200">
+                    获取我的位置
+                </button>
+                <span id="locationStatus" class="text-xs text-gray-400"></span>
+            </div>
+        </div>
+        <textarea id="reviewInput" rows="8"
+            class="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
+            placeholder="请输入店铺列表"></textarea>
+        <div class="mt-3 flex justify-between items-center">
+            <span class="text-xs text-gray-400">支持含编号、店名、地址的评论格式</span>
+            <button onclick="generateMap()"
+                class="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm shadow-sm">
+                生成地图
+            </button>
+        </div>
+    </div>
+
+    <!-- Map Section -->
+    <div id="mapSection" class="mb-6" style="display:none">
+        <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div id="mapContainer"></div>
+        </div>
+    </div>
+
+    <!-- Results Section -->
+    <div id="resultsSection" class="mb-6" style="display:none">
+        <h2 class="text-lg font-semibold text-gray-700 mb-3">店铺列表</h2>
+        <div id="shopCards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+    </div>
+</div>
+
+<script>
+    let map = null;
+    let userLng = null;
+    let userLat = null;
+    let amapJsKey = null;
+
+    // Load Amap JS Key from backend
+    fetch('/api/config/amap-js-key')
+        .then(r => r.json())
+        .then(data => {
+            amapJsKey = data.jsApiKey;
+            loadAmapScript();
+        })
+        .catch(() => console.warn('Failed to load amap config'));
+
+    function loadAmapScript() {
+        if (!amapJsKey) return;
+        const s = document.createElement('script');
+        s.src = `https://webapi.amap.com/maps?v=2.0&key=${amapJsKey}`;
+        s.onload = () => {
+            map = new AMap.Map('mapContainer', {
+                zoom: 13,
+                center: [120.15, 30.28],
+                viewMode: '2D'
+            });
+        };
+        document.head.appendChild(s);
+    }
+
+    function getLocation() {
+        const btn = document.getElementById('btnLocation');
+        const status = document.getElementById('locationStatus');
+        btn.disabled = true;
+        btn.textContent = '定位中...';
+        status.textContent = '';
+
+        if (!navigator.geolocation) {
+            status.textContent = '浏览器不支持定位';
+            btn.disabled = false;
+            btn.textContent = '获取我的位置';
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                userLng = pos.coords.longitude;
+                userLat = pos.coords.latitude;
+                status.textContent = `已定位 (${userLng.toFixed(4)}, ${userLat.toFixed(4)})`;
+                status.style.color = '#22c55e';
+                btn.disabled = false;
+                btn.textContent = '获取我的位置';
+            },
+            (err) => {
+                status.textContent = '定位失败: ' + err.message;
+                status.style.color = '#ef4444';
+                btn.disabled = false;
+                btn.textContent = '获取我的位置';
+            },
+            { enableHighAccuracy: true, timeout: 10000 }
+        );
+    }
+
+    async function generateMap() {
+        const content = document.getElementById('reviewInput').value.trim();
+        if (!content) {
+            alert('请先粘贴评论文本');
+            return;
+        }
+
+        showLoading('正在解析评论中的店铺信息...');
+
+        try {
+            const response = await fetch('/api/navi/parse', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    content: content,
+                    userLng: userLng,
+                    userLat: userLat
+                })
+            });
+
+            if (!response.ok) {
+                const err = await response.text();
+                throw new Error(err);
+            }
+
+            const result = await response.json();
+            hideLoading();
+            renderResult(result);
+        } catch (e) {
+            hideLoading();
+            alert('处理失败: ' + e.message);
+        }
+    }
+
+    function renderResult(result) {
+        if (!map) {
+            alert('地图尚未加载完成，请刷新页面重试');
+            return;
+        }
+
+        map.clearMap();
+
+        // Determine center
+        const validShops = result.shops.filter(s => s.lng && s.lat);
+        if (validShops.length === 0) {
+            alert('未找到任何可定位的店铺');
+            return;
+        }
+
+        // Add user marker
+        if (result.userLng && result.userLat) {
+            const userMarker = new AMap.Marker({
+                position: [result.userLng, result.userLat],
+                content: '<div style="width:16px;height:16px;background:#3b82f6;border:3px solid white;border-radius:50%;box-shadow:0 0 6px rgba(59,130,246,0.5)"></div>',
+                offset: new AMap.Pixel(-8, -8),
+                zIndex: 200
+            });
+            map.add(userMarker);
+
+            // Label for user
+            const userLabel = new AMap.Text({
+                text: '我的位置',
+                position: [result.userLng, result.userLat],
+                offset: new AMap.Pixel(-30, -24),
+                style: {
+                    'background': '#3b82f6',
+                    'color': '#fff',
+                    'border': 'none',
+                    'border-radius': '4px',
+                    'padding': '2px 8px',
+                    'font-size': '12px'
+                }
+            });
+            map.add(userLabel);
+        }
+
+        // Add shop markers
+        const bounds = [];
+        validShops.forEach((shop, index) => {
+            const pos = [shop.lng, shop.lat];
+            bounds.push(pos);
+
+            // Marker color based on verified status
+            const color = shop.verified ? '#22c55e' : '#f59e0b';
+            const markerContent = `<div style="width:24px;height:24px;background:${color};border:3px solid white;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.3);cursor:pointer"></div>`;
+
+            const marker = new AMap.Marker({
+                position: pos,
+                content: markerContent,
+                offset: new AMap.Pixel(-12, -12),
+                zIndex: 100
+            });
+
+            // Click to show info
+            const distText = shop.distance != null ? (shop.distance >= 1000
+                ? (shop.distance / 1000).toFixed(1) + ' km'
+                : Math.round(shop.distance) + ' m') : '未知';
+
+            const infoHtml = `
+                <div class="amap-info-content">
+                    <h4>${shop.name}</h4>
+                    <p><strong>地址:</strong> ${shop.address}</p>
+                    <p><strong>距离:</strong> ${distText}</p>
+                    <p><strong>状态:</strong> <span style="color:${shop.verified ? '#22c55e' : '#f59e0b'}">${shop.verified ? '已验证' : '待确认'}</span></p>
+                    ${shop.verifyNote ? '<p style="font-size:12px;color:#888">' + shop.verifyNote + '</p>' : ''}
+                </div>
+            `;
+
+            const infoWindow = new AMap.InfoWindow({
+                content: infoHtml,
+                offset: new AMap.Pixel(0, -16)
+            });
+
+            marker.on('click', () => {
+                infoWindow.open(map, pos);
+            });
+
+            map.add(marker);
+
+            // Shop name label
+            const shopLabel = new AMap.Text({
+                text: shop.name,
+                position: pos,
+                offset: new AMap.Pixel(-40, -32),
+                style: {
+                    'background': '#fff',
+                    'border': `2px solid ${color}`,
+                    'border-radius': '6px',
+                    'padding': '2px 8px',
+                    'font-size': '11px',
+                    'white-space': 'nowrap',
+                    'box-shadow': '0 1px 4px rgba(0,0,0,0.15)'
+                }
+            });
+            map.add(shopLabel);
+
+            // Draw line from user to shop if user location exists
+            if (result.userLng && result.userLat) {
+                const line = new AMap.Polyline({
+                    path: [[result.userLng, result.userLat], pos],
+                    strokeColor: '#94a3b8',
+                    strokeWeight: 1.5,
+                    strokeStyle: 'dashed',
+                    strokeOpacity: 0.6
+                });
+                map.add(line);
+            }
+        });
+
+        // Fit map to show all markers
+        map.setFitView(null, false, [60, 60, 60, 60]);
+
+        // Show map section
+        document.getElementById('mapSection').style.display = 'block';
+
+        // Render shop cards
+        renderShopCards(result);
+        document.getElementById('resultsSection').style.display = 'block';
+    }
+
+    function renderShopCards(result) {
+        const container = document.getElementById('shopCards');
+        container.innerHTML = '';
+
+        result.shops.forEach((shop, index) => {
+            const distText = shop.distance != null ? (shop.distance >= 1000
+                ? (shop.distance / 1000).toFixed(1) + ' km'
+                : Math.round(shop.distance) + ' m') : '-';
+
+            const borderColor = shop.verified ? 'border-green-400' : 'border-amber-400';
+            const badgeColor = shop.verified ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700';
+            const badgeText = shop.verified ? '已验证' : '待确认';
+
+            const card = document.createElement('div');
+            card.className = `shop-card bg-white rounded-xl border-l-4 ${borderColor} shadow-sm p-4 cursor-pointer`;
+            card.innerHTML = `
+                <div class="flex items-start justify-between mb-2">
+                    <h3 class="font-semibold text-gray-800 text-sm leading-tight">${shop.name}</h3>
+                    <span class="text-xs px-2 py-0.5 rounded-full ${badgeColor} ml-2 whitespace-nowrap">${badgeText}</span>
+                </div>
+                <p class="text-xs text-gray-500 mb-2">${shop.address}</p>
+                <div class="flex items-center justify-between">
+                    <span class="text-xs text-gray-400">
+                        ${shop.lng ? `(${shop.lng.toFixed(4)}, ${shop.lat.toFixed(4)})` : '无坐标'}
+                    </span>
+                    <span class="text-sm font-medium ${shop.distance ? 'text-blue-600' : 'text-gray-300'}">
+                        ${distText}
+                    </span>
+                </div>
+                ${shop.verifyNote ? '<p class="text-xs text-gray-400 mt-1">' + shop.verifyNote + '</p>' : ''}
+            `;
+            card.onclick = () => {
+                if (shop.lng && shop.lat && map) {
+                    map.setZoomAndCenter(15, [shop.lng, shop.lat]);
+                }
+            };
+            container.appendChild(card);
+        });
+    }
+
+    function showLoading(text) {
+        document.getElementById('loadingText').textContent = text || '处理中...';
+        document.getElementById('loadingOverlay').style.display = 'flex';
+    }
+
+    function hideLoading() {
+        document.getElementById('loadingOverlay').style.display = 'none';
+    }
+</script>
+</body>
+</html>

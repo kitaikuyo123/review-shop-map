@@ -1,0 +1,16 @@
+server:
+  port: 12000
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+llm:
+  apiKey: "sk-560a2545f9854492a6e7b0f6482becd0"
+  baseUrl: "https://api.deepseek.com"
+  modelName: "deepseek-v4-flash"
+
+amap:
+  apiKey: "f8f44f489885004ebaefc71df867f6b5"
+  jsApiKey: "4e10d92a18c55b11786d659758236d0a"
