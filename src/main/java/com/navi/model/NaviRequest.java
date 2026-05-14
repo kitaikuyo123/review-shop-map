@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class NaviRequest {
     private String content;
+    private String province;
     private Double userLng;
     private Double userLat;
 }

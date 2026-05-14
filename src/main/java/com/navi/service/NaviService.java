@@ -28,12 +28,14 @@ public class NaviService {
             throw new RuntimeException("未能从评论文本中解析出任何店铺信息");
         }
 
-        // 推断城市：取第一个有城市信息的条目
-        String city = parsedShops.stream()
-                .filter(s -> s.getCity() != null && !s.getCity().isEmpty())
-                .map(ReviewParseService.ParsedShop::getCity)
-                .findFirst()
-                .orElse("");
+        // 搜索范围：用户选择的省份优先，否则取 LLM 提取的城市
+        String region = (request.getProvince() != null && !request.getProvince().isEmpty())
+                ? request.getProvince()
+                : parsedShops.stream()
+                    .filter(s -> s.getCity() != null && !s.getCity().isEmpty())
+                    .map(ReviewParseService.ParsedShop::getCity)
+                    .findFirst()
+                    .orElse("");
 
         // 2. 逐个验证并获取坐标
         List<ShopInfo> shops = new ArrayList<>();
@@ -45,7 +47,7 @@ public class NaviService {
 
             // 先用店名搜索 POI
             String searchCity = parsed.getCity() != null && !parsed.getCity().isEmpty()
-                    ? parsed.getCity() : city;
+                    ? parsed.getCity() : region;
             ShopInfo found = amapService.textSearch(parsed.getName(), searchCity);
 
             // 间隔 250ms 避免触发高德 QPS 限制
@@ -88,7 +90,7 @@ public class NaviService {
         return NaviResult.builder()
                 .userLng(request.getUserLng())
                 .userLat(request.getUserLat())
-                .city(city)
+                .city(region)
                 .shops(shops)
                 .build();
     }
