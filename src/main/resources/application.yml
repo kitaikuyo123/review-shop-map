@@ -1,0 +1,16 @@
+server:
+  port: 12000
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+llm:
+  apiKey: "your-llm-api-key"
+  baseUrl: "your-llm-base-url"
+  modelName: "your-llm-model-name"
+
+amap:
+  apiKey: "your-amap-web-api-key"
+  jsApiKey: "your-amap-js-api-key"
