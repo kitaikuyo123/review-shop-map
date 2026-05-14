@@ -10,3 +10,4 @@ target/
 .classpath
 bin/
 .vscode/
+application.yml

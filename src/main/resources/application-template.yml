@@ -7,10 +7,10 @@ server:
       force: true
 
 llm:
-  apiKey: "sk-560a2545f9854492a6e7b0f6482becd0"
+  apiKey: "your-llm-api-key"
   baseUrl: "https://api.deepseek.com"
   modelName: "deepseek-v4-flash"
 
 amap:
-  apiKey: "f8f44f489885004ebaefc71df867f6b5"
-  jsApiKey: "4e10d92a18c55b11786d659758236d0a"
+  apiKey: "your-amap-web-api-key"
+  jsApiKey: "your-amap-js-api-key"

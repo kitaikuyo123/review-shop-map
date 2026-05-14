@@ -12,8 +12,8 @@
     <groupId>com.navi</groupId>
     <artifactId>navi</artifactId>
     <version>1.0.0</version>
-    <name>navi</name>
-    <description>Review-based shop map navigator</description>
+    <name>评论店铺地图导航</name>
+    <description>粘贴评论文本，一键将多个店铺同时展示在地图上，显示相对位置和距离</description>
     <properties>
         <java.version>21</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
