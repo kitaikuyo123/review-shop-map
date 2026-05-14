@@ -20,20 +20,20 @@
 
 ### 配置
 
-编辑 `src/main/resources/application.yml`：
+在 `application.yml` 中填入自己的 API Key：
 
 ```yaml
 llm:
   apiKey: "your-llm-api-key"
-  baseUrl: "https://api.deepseek.com"
-  modelName: "deepseek-v4-flash"
+  baseUrl: "your-llm-base-url"
+  modelName: "your-llm-model-name"
 
 amap:
   apiKey: "your-amap-web-api-key"
   jsApiKey: "your-amap-js-api-key"
 ```
 
-- `llm.apiKey` — 兼容 OpenAI 接口的 API Key（DeepSeek / OpenAI 等）
+- `llm.apiKey` — 兼容 OpenAI 接口的 API Key
 - `amap.apiKey` — [高德 Web 服务 Key](https://lbs.amap.com/api/webservice/create-project-and-key)
 - `amap.jsApiKey` — [高德 JS API Key](https://lbs.amap.com/api/javascript-api-v2/prerequisites)
 
@@ -44,8 +44,6 @@ mvn clean spring-boot:run -Dspring-boot.run.jvmArguments="-Dfile.encoding=UTF-8"
 ```
 
 启动后访问 **http://localhost:12000**。
-
-> **Windows PowerShell 注意**：先执行 `chcp 65001` 切换 UTF-8 代码页，否则日志中文会乱码。
 
 ## API
 
